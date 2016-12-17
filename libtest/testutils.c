@@ -497,8 +497,8 @@ assert_gpointer_non_fatal(gpointer actual, gpointer expected, const gchar *error
 }
 
 gboolean
-assert_msg_field_equals_non_fatal(LogMessage *msg, const gchar *field_name, const gchar *expected_value, gssize expected_value_len,
-                                  const gchar *error_message, ...)
+assert_msg_field_equals_non_fatal(LogMessage *msg, const gchar *field_name, const gchar *expected_value,
+                                  gssize expected_value_len, const gchar *error_message, ...)
 {
   gssize actual_value_len;
   const gchar *actual_value;
@@ -541,13 +541,4 @@ gboolean
 testutils_deinit(void)
 {
   return testutils_global_success;
-}
-
-gchar *
-basename_const(const gchar *file)
-{
-  gchar *dup_file = g_strdup(file);
-  gchar *base = g_strdup(basename(dup_file));
-  g_free(dup_file);
-  return base;
 }
