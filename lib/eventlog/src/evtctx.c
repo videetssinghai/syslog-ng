@@ -94,12 +94,13 @@ evt_read_config(EVTCONTEXT *ctx)
 {
   FILE *fp;
   char line[1024];
+  char *s;
 
   fp = fopen(__PATH_ETC_EVENTLOG_CONF, "r");
   if (!fp)
     return;
-  fgets(line, sizeof(line), fp);
-  while (!feof(fp))
+  s = fgets(line, sizeof(line), fp);
+  while ((s != NULL) && !feof(fp))
     {
       char *keyword, *value;
 
@@ -128,7 +129,7 @@ evt_read_config(EVTCONTEXT *ctx)
           ctx->ec_flags = strtoul(value, NULL, 0) & EF_ADD_ALL;
         }
 next:
-      fgets(line, sizeof(line), fp);
+      s = fgets(line, sizeof(line), fp);
     }
 }
 
