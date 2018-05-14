@@ -30,6 +30,7 @@ int testdst_parse(CfgLexer *lexer, LogDriver **instance, gpointer arg);
 
 static CfgLexerKeyword testdst_keywords[] =
 {
+  { "testdst",               KW_TESTDST },
   { NULL }
 };
 

@@ -34,8 +34,9 @@
 #include "messages.h"
 #include "plugin.h"
 #include "cfg-grammar.h"
-
 #include <string.h>
+
+extern LogDriver *last_driver;
 
 }
 
@@ -51,17 +52,32 @@
 
 /* INCLUDE_DECLS */
 
+%type   <ptr> dest_testfile
+
+%token KW_TESTDST
+
 %%
 
 start
-  : LL_CONTEXT_DESTINATION first_rule          { YYACCEPT; }
+  : LL_CONTEXT_DESTINATION dest_testfile       { *instance = $2; YYACCEPT; }
+        ;
+
+dest_testfile
+  : KW_TESTDST 
+          '(' string            { last_driver = testdst_dd_new($3, configuration); free($3); }
+    testdst_opts
+    ')'             { $$ = last_driver; }
   ;
 
-first_rule
-  :
+testdst_opts
+  : testdst_opt testdst_opts
+  |
   ;
 
+testdst_opt
+  : KW_TEMPLATE '(' template_content ')'      { testdst_dd_set_template(last_driver, $3); }
+  | { last_template_options = testdst_dd_get_template_options(last_driver); } template_option
+  ;
 /* INCLUDE_RULES */
 
 %%
-
