@@ -1,15 +1,12 @@
 #include "testdst.h"
 #include "messages.h"
 #include "scratch-buffers.h"
+#include "libcurl.h"
 
 #include <string.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
-
-/* 1not sure if should be included */
-#include "plugin.h"
-#include "messages.h"
 
 typedef struct _TestDstDriver
 {
@@ -17,6 +14,8 @@ typedef struct _TestDstDriver
   LogTemplateOptions template_options;
   LogTemplate *template;
   gchar *testfile_name;
+  gchar *url;
+  gchar *index;
   time_t suspend_until;
 } TestDstDriver;
 
@@ -38,6 +37,24 @@ testdst_dd_set_template(LogDriver *s, LogTemplate *template)
 
   log_template_unref(self->template);
   self->template = template;
+}
+
+void
+testdst_dd_set_url(LogDriver *d, const gchar *url)
+{
+  TestDstDriver *self = (TestDstDriver *) d;
+
+  g_free(self->url);
+  self->url = g_strdup(url);
+}
+
+void
+testdst_dd_set_index(LogDriver *d, const gchar *index)
+{
+  TestDstDriver *self = (TestDstDriver *) d;
+
+  g_free(self->index);
+  self->index = g_strdup(index);
 }
 
 static gboolean
@@ -62,8 +79,8 @@ _evt_tag_message(const GString *msg)
   const int max_len = 30;
 
   return evt_tag_printf("message", "%.*s%s",
-                        (int) MIN(max_len, msg->len), msg->str,
-                        msg->len > max_len ? "..." : "");
+    (int) MIN(max_len, msg->len), msg->str,
+    msg->len > max_len ? "..." : "");
 }
 
 static void
@@ -81,42 +98,52 @@ _write_message(TestDstDriver *self, const GString *msg)
   gint rc;
 
   msg_debug("Posting message to test file",
-            evt_tag_str("test_file", self->testfile_name),
-            evt_tag_str("driver", self->super.super.id),
-            _evt_tag_message(msg));
+    evt_tag_str("test_file", self->testfile_name),
+    evt_tag_str("driver", self->super.super.id),
+    _evt_tag_message(msg));
   fd = open(self->testfile_name, O_NOCTTY | O_WRONLY | O_NONBLOCK);
   if (fd < 0)
-    {
-      msg_error("Error opening test file",
-                evt_tag_str("test_file", self->testfile_name),
-                evt_tag_str("driver", self->super.super.id),
-                evt_tag_error("error"),
-                _evt_tag_message(msg));
-      goto exit;
-    }
+  {
+    msg_error("Error opening test file",
+      evt_tag_str("test_file", self->testfile_name),
+      evt_tag_str("driver", self->super.super.id),
+      evt_tag_error("error"),
+      _evt_tag_message(msg));
+    goto exit;
+  }
+  msg_debug("Posting message to Elasticsearch before",
+    evt_tag_str("test_file", self->testfile_name),
+    evt_tag_str("driver", self->super.super.id),
+    _evt_tag_message(msg));
 
   rc = write(fd, msg->str, msg->len);
+  put("syslog/id/1","http://localhost:9200/", msg->str);
+  msg_debug("Posting message to Elasticsearch",
+    evt_tag_str("test_file", self->testfile_name),
+    evt_tag_str("driver", self->super.super.id),
+    _evt_tag_message(msg));
+
   if (rc < 0)
-    {
-      msg_error("Error writing to test file",
-                evt_tag_str("test_file", self->testfile_name),
-                evt_tag_str("driver", self->super.super.id),
-                evt_tag_error("error"),
-                _evt_tag_message(msg));
-      goto exit;
-    }
+  {
+    msg_error("Error writing to test file",
+      evt_tag_str("test_file", self->testfile_name),
+      evt_tag_str("driver", self->super.super.id),
+      evt_tag_error("error"),
+      _evt_tag_message(msg));
+    goto exit;
+  }
   else if (rc != msg->len)
-    {
-      msg_error("Partial write to test_file, probably the output is too much for the kernel to consume",
-                evt_tag_str("test_file", self->testfile_name),
-                evt_tag_str("driver", self->super.super.id),
-                _evt_tag_message(msg));
-      goto exit;
-    }
+  {
+    msg_error("Partial write to test_file, probably the output is too much for the kernel to consume",
+      evt_tag_str("test_file", self->testfile_name),
+      evt_tag_str("driver", self->super.super.id),
+      _evt_tag_message(msg));
+    goto exit;
+  }
 
   success = TRUE;
 
-exit:
+  exit:
   if (fd >= 0)
     close(fd);
 
@@ -143,7 +170,7 @@ testdst_dd_queue(LogPipe *s, LogMessage *msg, const LogPathOptions *path_options
   if (!success)
     _suspend_output(self, now);
 
-finish:
+  finish:
   log_dest_driver_queue_method(s, msg, path_options);
 }
 

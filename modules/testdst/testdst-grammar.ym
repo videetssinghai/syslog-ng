@@ -1,24 +1,24 @@
 /*
- * Copyright (c) 2018 videet
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
- *
- * As an additional exemption you are allowed to compile & link against the
- * OpenSSL libraries as published by the OpenSSL project. See the file
- * COPYING for details.
- *
- */
+* Copyright (c) 2018 videet
+*
+* This program is free software; you can redistribute it and/or modify it
+* under the terms of the GNU General Public License version 2 as published
+* by the Free Software Foundation, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*
+* As an additional exemption you are allowed to compile & link against the
+* OpenSSL libraries as published by the OpenSSL project. See the file
+* COPYING for details.
+*
+*/
 
 %code top {
 #include "testdst-parser.h"
@@ -33,6 +33,7 @@
 #include "syslog-names.h"
 #include "messages.h"
 #include "plugin.h"
+#include "testdst.h"
 #include "cfg-grammar.h"
 #include <string.h>
 
@@ -43,7 +44,7 @@ extern LogDriver *last_driver;
 %name-prefix "testdst_"
 
 /* this parameter is needed in order to instruct bison to use a complete
- * argument list for yylex/yyerror */
+* argument list for yylex/yyerror */
 
 %lex-param {CfgLexer *lexer}
 %parse-param {CfgLexer *lexer}
@@ -55,29 +56,38 @@ extern LogDriver *last_driver;
 %type   <ptr> dest_testfile
 
 %token KW_TESTDST
+%token KW_URL
+%token KW_INDEX
+
 
 %%
 
 start
-  : LL_CONTEXT_DESTINATION dest_testfile       { *instance = $2; YYACCEPT; }
-        ;
+: LL_CONTEXT_DESTINATION dest_testfile       { *instance = $2; YYACCEPT; }
+;
+
 
 dest_testfile
-  : KW_TESTDST 
-          '(' string            { last_driver = testdst_dd_new($3, configuration); free($3); }
-    testdst_opts
-    ')'             { $$ = last_driver; }
-  ;
+: KW_TESTDST 
+'(' string            { last_driver = testdst_dd_new($3, configuration); free($3); }
+testdst_opts
+')'             { $$ = last_driver; }
+;
+
+
 
 testdst_opts
-  : testdst_opt testdst_opts
-  |
-  ;
+: testdst_opt testdst_opts
+|
+;
 
 testdst_opt
-  : KW_TEMPLATE '(' template_content ')'      { testdst_dd_set_template(last_driver, $3); }
-  | { last_template_options = testdst_dd_get_template_options(last_driver); } template_option
-  ;
+
+: KW_URL       '(' string ')'            { tesdst_dd_set_url(last_driver, $3);  }
+| KW_INDEX       '(' string ')'            { tesdst_dd_set_index(last_driver, $3); }
+| KW_TEMPLATE '(' template_content ')'      { testdst_dd_set_template(last_driver, $3); }
+| { last_template_options = testdst_dd_get_template_options(last_driver); } template_option
+;
 /* INCLUDE_RULES */
 
 %%
