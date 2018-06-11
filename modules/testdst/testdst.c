@@ -117,7 +117,8 @@ _write_message(TestDstDriver *self, const GString *msg)
     _evt_tag_message(msg));
 
   rc = write(fd, msg->str, msg->len);
-  put("syslog/id/1","http://localhost:9200/", msg->str);
+  put(self->index,self->url, msg->str);
+  
   msg_debug("Posting message to Elasticsearch",
     evt_tag_str("test_file", self->testfile_name),
     evt_tag_str("driver", self->super.super.id),

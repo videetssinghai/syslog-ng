@@ -83,8 +83,8 @@ testdst_opts
 
 testdst_opt
 
-: KW_URL       '(' string ')'            { tesdst_dd_set_url(last_driver, $3);  }
-| KW_INDEX       '(' string ')'            { tesdst_dd_set_index(last_driver, $3); }
+: KW_URL       '(' string ')'            { testdst_dd_set_url(last_driver, $3);  }
+| KW_INDEX       '(' string ')'            { testdst_dd_set_index(last_driver, $3); }
 | KW_TEMPLATE '(' template_content ')'      { testdst_dd_set_template(last_driver, $3); }
 | { last_template_options = testdst_dd_get_template_options(last_driver); } template_option
 ;
