@@ -31,8 +31,11 @@ int testdst_parse(CfgLexer *lexer, LogDriver **instance, gpointer arg);
 static CfgLexerKeyword testdst_keywords[] =
 {
   { "testdst",               KW_TESTDST },
-  { "url",               KW_URL },
+  { "server",               KW_SERVER },
+  { "port",               KW_PORT },
   { "index",               KW_INDEX },
+  { "type",               KW_TYPE },
+  { "custom_id",          KW_CUSTOM_ID },
   { NULL }
 };
 

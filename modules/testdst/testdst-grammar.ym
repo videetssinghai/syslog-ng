@@ -56,8 +56,12 @@ extern LogDriver *last_driver;
 %type   <ptr> dest_testfile
 
 %token KW_TESTDST
-%token KW_URL
+%token KW_SERVER
+%token KW_PORT
 %token KW_INDEX
+%token KW_TYPE
+%token KW_CUSTOM_ID
+
 
 
 %%
@@ -83,8 +87,11 @@ testdst_opts
 
 testdst_opt
 
-: KW_URL       '(' string ')'            { testdst_dd_set_url(last_driver, $3);  }
+: KW_SERVER       '(' string ')'            { testdst_dd_set_server(last_driver, $3);  }
+| KW_PORT       '(' string ')'            { testdst_dd_set_port(last_driver, $3); }
 | KW_INDEX       '(' string ')'            { testdst_dd_set_index(last_driver, $3); }
+| KW_TYPE      '(' string ')'            { testdst_dd_set_type(last_driver, $3); }
+| KW_CUSTOM_ID       '(' string ')'            { testdst_dd_set_custom_id(last_driver, $3); }
 | KW_TEMPLATE '(' template_content ')'      { testdst_dd_set_template(last_driver, $3); }
 | { last_template_options = testdst_dd_get_template_options(last_driver); } template_option
 ;

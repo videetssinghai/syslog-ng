@@ -14,8 +14,11 @@ typedef struct _TestDstDriver
   LogTemplateOptions template_options;
   LogTemplate *template;
   gchar *testfile_name;
-  gchar *url;
+  gchar *server;
+  gchar *port;
   gchar *index;
+  gchar *type;
+  gchar *custom_id;
   time_t suspend_until;
 } TestDstDriver;
 
@@ -40,12 +43,21 @@ testdst_dd_set_template(LogDriver *s, LogTemplate *template)
 }
 
 void
-testdst_dd_set_url(LogDriver *d, const gchar *url)
+testdst_dd_set_server(LogDriver *d, const gchar *server)
 {
   TestDstDriver *self = (TestDstDriver *) d;
 
-  g_free(self->url);
-  self->url = g_strdup(url);
+  g_free(self->server);
+  self->server = g_strdup(server);
+}
+
+void
+testdst_dd_set_port(LogDriver *d, const gchar *port)
+{
+  TestDstDriver *self = (TestDstDriver *) d;
+
+  g_free(self->port);
+  self->port = g_strdup(port);
 }
 
 void
@@ -55,6 +67,24 @@ testdst_dd_set_index(LogDriver *d, const gchar *index)
 
   g_free(self->index);
   self->index = g_strdup(index);
+}
+
+void
+testdst_dd_set_type(LogDriver *d, const gchar *type)
+{
+  TestDstDriver *self = (TestDstDriver *) d;
+
+  g_free(self->type);
+  self->type = g_strdup(type);
+}
+
+void
+testdst_dd_set_custom_id(LogDriver *d, const gchar *custom_id)
+{
+  TestDstDriver *self = (TestDstDriver *) d;
+
+  g_free(self->custom_id);
+  self->custom_id = g_strdup(custom_id);
 }
 
 static gboolean
@@ -117,7 +147,7 @@ _write_message(TestDstDriver *self, const GString *msg)
     _evt_tag_message(msg));
 
   rc = write(fd, msg->str, msg->len);
-  put(self->index,self->url, msg->str);
+  put(self->server, self->port, self->index, self->type, self->custom_id, msg->str);
   
   msg_debug("Posting message to Elasticsearch",
     evt_tag_str("test_file", self->testfile_name),

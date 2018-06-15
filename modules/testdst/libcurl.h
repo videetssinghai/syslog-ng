@@ -4,5 +4,5 @@
 
 
 char *get(char *query, char *server);
-char* put(char *query, char* server, char *json_struct);
+char* put(char* server, char *port, char *index, char *type, char *custom_id, char *json_struct);
 #endif

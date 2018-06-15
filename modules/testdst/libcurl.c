@@ -17,7 +17,8 @@ struct string {
   size_t len;
 };
 
-void init_string(struct string *s) {
+static void 
+init_string(struct string *s) {
   s->len = 0;
   s->ptr = malloc(s->len+1);
   if (s->ptr == NULL) {
@@ -27,6 +28,7 @@ void init_string(struct string *s) {
   s->ptr[0] = '\0';
 }
 
+static 
 size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s) {
 
   size_t new_len = s->len + size*nmemb;
@@ -64,47 +66,41 @@ void deinit() {
   printf("%s\n", "deinit called");
 }
 
-char *build_url(char* server, char* query) {
+static GString *
+build_url(char* server, char* port, char* index, char* type, char* custom_id) {
 
-  char *request ="";
-  if((request = malloc(strlen(query)+strlen(server)+1)) != NULL){
-    request[0] = '\0';   // ensures the memory is an empty string
-    strcat(request,server);
-    strcat(request,query);
-    return request;
-  } else {
-    fprintf(stderr,"malloc failed!\n");
-    exit;
-  }
+ GString *url = g_string_sized_new(256);
+ g_string_printf(url, "http://%s:%s/%s/%s/%s",server, port, index, type, custom_id);
+ return url;
 
 }
 
 char *get(char *query, char *server) {
 
-  char *request = build_url(server, query);
-init();
-  if(curl) {
-    curl_easy_setopt(curl, CURLOPT_URL, request);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
+  // char *request = build_url(server, query);
+  // init();
+  // if(curl) {
+  //   curl_easy_setopt(curl, CURLOPT_URL, request);
+  //   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
+  //   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
 
-    res = curl_easy_perform(curl);
-    printf("%s\n", s.ptr);
-    value = s.ptr;
+  //   res = curl_easy_perform(curl);
+  //   printf("%s\n", s.ptr);
+  //   value = s.ptr;
 
-    /* Check for errors */ 
-    if(res != CURLE_OK)
-      fprintf(stderr, "curl_easy_perform() failed: %s\n",
-        curl_easy_strerror(res));
+  //   /* Check for errors */ 
+  //   if(res != CURLE_OK)
+  //     fprintf(stderr, "curl_easy_perform() failed: %s\n",
+  //       curl_easy_strerror(res));
 
-    /* always cleanup */ 
-    curl_easy_cleanup(curl);
-  }
-  deinit();
+  //   /* always cleanup */ 
+  //   curl_easy_cleanup(curl);
+  // }
+  // deinit();
   return value;
 }
 
-void set_headers() {
+static void set_headers() {
 
   if(curl) {
     headers = curl_slist_append(headers, "Accept: application/json");
@@ -120,17 +116,17 @@ void ir_strcpy( char *s1, const char *s2, int rb, int re )
   *s1 = 0;
 }
 
-char* put(char *query, char* server, char *json_struct) {
-  char *request = build_url(server, query);
+char* put(char* server, char *port, char *index, char *type, char *custom_id, char *json_struct) {
+  GString *request = build_url(server, port, index, type, custom_id);
   init();
 
   msg_debug("Inside the libcurl",
-    evt_tag_str("url", request),
+    evt_tag_str("url", request->str),
     evt_tag_str("server", server),evt_tag_str("data", json_struct));
 
   set_headers();
   if(curl) {
-    curl_easy_setopt(curl, CURLOPT_URL, request);
+    curl_easy_setopt(curl, CURLOPT_URL, request->str);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST"); /* !!! */
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_struct); /* data goes here */
@@ -154,7 +150,7 @@ char* put(char *query, char* server, char *json_struct) {
     printf("curl not initialized correctly");
 
   }
-deinit();
+  deinit();
 }
 
 // int main(int argc, char** argv)
@@ -205,7 +201,7 @@ deinit();
 
 //    fprintf(fptr,"%s\n%s\n%s\n", method, query, server);
 //    printf("%s\n","Please enter correct method");
-   
+
 //  }
 
 //  deinit();
