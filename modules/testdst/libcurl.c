@@ -12,58 +12,39 @@
 #include <unistd.h>
 
 
-struct string {
-  char *ptr;
-  size_t len;
+struct MemoryStruct {
+  char *memory;
+  size_t size;
 };
 
-static void 
-init_string(struct string *s) {
-  s->len = 0;
-  s->ptr = malloc(s->len+1);
-  if (s->ptr == NULL) {
-    fprintf(stderr, "malloc() failed\n");
-    exit(EXIT_FAILURE);
-  }
-  s->ptr[0] = '\0';
-}
 
-static 
-size_t writefunc(void *ptr, size_t size, size_t nmemb, struct string *s) {
-
-  size_t new_len = s->len + size*nmemb;
-  s->ptr = realloc(s->ptr, new_len+1);
-  if (s->ptr == NULL) {
-    fprintf(stderr, "realloc() failed\n");
-    exit(EXIT_FAILURE);
-  }
-  memcpy(s->ptr+s->len, ptr, size*nmemb);
-  s->ptr[new_len] = '\0';
-  s->len = new_len;
-
-  return size*nmemb;
-}
-
-CURL *curl;
-CURLcode res;
 char *value = NULL;
-struct string s;
 struct curl_slist *headers = NULL;
 
-void init() {
+typedef struct _Testdst_Curl
+{
+ CURL *curl;
+ CURLcode res;
 
-  init_string(&s);
+} Testdst_Curl; 
+
+Testdst_Curl *self;
+
+void
+testdst_curl_init() {
+
+  self = g_new0(Testdst_Curl, 1);
   curl_global_init(CURL_GLOBAL_DEFAULT);
-  curl = curl_easy_init();
-  printf("%s\n", "init called");
+  self->curl = curl_easy_init();
 
 }
 
-void deinit() {
+void
+testdst_curl_deinit() {
 
-  free(s.ptr);
-  curl_global_cleanup();
-  printf("%s\n", "deinit called");
+ curl_easy_cleanup(self->curl);
+ curl_global_cleanup();
+
 }
 
 static GString *
@@ -75,34 +56,11 @@ build_url(char* server, char* port, char* index, char* type, char* custom_id) {
 
 }
 
-char *get(char *query, char *server) {
+static void 
+_set_curl_headers() {
+  headers = NULL;
 
-  // char *request = build_url(server, query);
-  // init();
-  // if(curl) {
-  //   curl_easy_setopt(curl, CURLOPT_URL, request);
-  //   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-  //   curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
-
-  //   res = curl_easy_perform(curl);
-  //   printf("%s\n", s.ptr);
-  //   value = s.ptr;
-
-  //   /* Check for errors */ 
-  //   if(res != CURLE_OK)
-  //     fprintf(stderr, "curl_easy_perform() failed: %s\n",
-  //       curl_easy_strerror(res));
-
-  //   /* always cleanup */ 
-  //   curl_easy_cleanup(curl);
-  // }
-  // deinit();
-  return value;
-}
-
-static void set_headers() {
-
-  if(curl) {
+  if(self->curl) {
     headers = curl_slist_append(headers, "Accept: application/json");
     headers = curl_slist_append(headers, "Content-Type: application/json");
     headers = curl_slist_append(headers, "charsets: utf-8");
@@ -110,100 +68,82 @@ static void set_headers() {
 
 }
 
-void ir_strcpy( char *s1, const char *s2, int rb, int re )
+static size_t
+WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
 {
-  while( (rb <= re) && (*s1++ = s2[rb]) ) rb++;
-  *s1 = 0;
+  size_t realsize = size * nmemb;
+  struct MemoryStruct *mem = (struct MemoryStruct *)userp;
+
+  mem->memory = realloc(mem->memory, mem->size + realsize + 1);
+  if(mem->memory == NULL) {
+    /* out of memory! */ 
+    printf("not enough memory (realloc returned NULL)\n");
+    return 0;
+  }
+
+  memcpy(&(mem->memory[mem->size]), contents, realsize);
+  mem->size += realsize;
+  mem->memory[mem->size] = 0;
+
+  return realsize;
 }
 
-char* put(char* server, char *port, char *index, char *type, char *custom_id, char *json_struct) {
+
+static void 
+curl_set_opt(gchar* msg, gchar* url)
+{
+    curl_easy_setopt(self->curl, CURLOPT_URL, url);
+    curl_easy_setopt(self->curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(self->curl, CURLOPT_CUSTOMREQUEST, "POST"); /* !!! */
+    curl_easy_setopt(self->curl, CURLOPT_POSTFIELDS, msg); /* data goes here */
+
+}
+
+glong 
+put(gchar* server, gchar *port, gchar *index, gchar *type, gchar *custom_id, gchar *json_struct)
+{
+  
   GString *request = build_url(server, port, index, type, custom_id);
-  init();
+
+  struct MemoryStruct chunk;
+  chunk.memory = malloc(1);  /* will be grown as needed by the realloc above */ 
+  chunk.size = 0;    /* no data at this point */ 
+  glong response_code;
 
   msg_debug("Inside the libcurl",
     evt_tag_str("url", request->str),
     evt_tag_str("server", server),evt_tag_str("data", json_struct));
 
-  set_headers();
-  if(curl) {
-    curl_easy_setopt(curl, CURLOPT_URL, request->str);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST"); /* !!! */
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_struct); /* data goes here */
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writefunc);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &s);
+  if(self->curl) {
+    _set_curl_headers();
 
-    res = curl_easy_perform(curl);
-    msg_debug("request done", evt_tag_str("result",s.ptr));
-    value = s.ptr;
+    curl_set_opt(json_struct, request->str);
+
+    /* for debugging */
+    curl_easy_setopt(self->curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
+    curl_easy_setopt(self->curl, CURLOPT_WRITEDATA, (void *)&chunk);
+    
+    self->res = curl_easy_perform(self->curl);
+
+    msg_debug("request done", evt_tag_str("result",chunk.memory));
 
     /* Check for errors */ 
-    if(res != CURLE_OK)
-      fprintf(stderr, "curl_easy_perform() failed: %s\n",
-        curl_easy_strerror(res));
-
+    if(self->res != CURLE_OK)
+      {
+        fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(self->res));
+        msg_error("Error in PUT",evt_tag_str("curl_easy_perform() failed: %s\n", curl_easy_strerror(self->res)));
+      }
+    
     /* always cleanup */ 
-    curl_easy_cleanup(curl);
-    return value;
+    curl_slist_free_all(headers);
+    free(chunk.memory);
+
+    curl_easy_getinfo (self->curl, CURLINFO_RESPONSE_CODE, &response_code);
+
+    return response_code;
   } else {
 
     printf("curl not initialized correctly");
 
   }
-  deinit();
 }
-
-// int main(int argc, char** argv)
-// {
-
-//   // char *jsonObj = "{ \"index\" : {} }\n{ \"name\" : \"videet\" }\n{ \"index\" : {} }\n{ \"name\" : \"surmeet\" }\n";
-//   init();
-//   FILE *fptr;
-
-//   fptr = fopen("/home/videet/ES6-client-tool/program.txt", "a");
-//   if(fptr == NULL) {
-//     printf("Error!");
-//   }
-
-//   fprintf(fptr,"%s\n", "hello");
-
-//   char *method = argv[1];
-//   fprintf(fptr,"%s\n", method);
-
-//   char *query = argv[2];
-//   fprintf(fptr,"%s\n", query);
-
-//   char *server = argv[3];
-//   fprintf(fptr,"%s\n", server);
-//   // printf("query: %s\n",query);
-//   // printf("server: %s\n",server);
-
-//   // char *method = "PUT";
-//   // char *query = "sample/s/33";
-//   // char *server = "http://localhost:9200/";
-
-//   if(!strcasecmp(method, "GET")) {
-//     get(query, server);
-
-//   } else if(!strcasecmp(method, "PUT")) {
-
-//     char *json_data = argv[4];
-//     // ir_strcpy(json_data, argv[4], 1, strlen(argv[4])-2);
-//     // char *json_data = "{ \"name\" : \"videet\" }";
-//     printf("data: %s\n",json_data);
-
-//     fprintf(fptr,"%s\n",json_data);
-//     fclose(fptr);
-
-//     put(query, server, json_data);
-
-//   } else {
-
-//    fprintf(fptr,"%s\n%s\n%s\n", method, query, server);
-//    printf("%s\n","Please enter correct method");
-
-//  }
-
-//  deinit();
-//  return 0;
-// }

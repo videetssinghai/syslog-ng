@@ -10,7 +10,7 @@
 
 typedef struct _TestDstDriver
 {
-  LogDestDriver super;
+  LogThrDestDriver super;
   LogTemplateOptions template_options;
   LogTemplate *template;
   gchar *testfile_name;
@@ -23,7 +23,6 @@ typedef struct _TestDstDriver
 } TestDstDriver;
 
 G_LOCK_DEFINE_STATIC(testdst_lock);
-
 
 LogTemplateOptions *
 testdst_dd_get_template_options(LogDriver *s)
@@ -87,22 +86,6 @@ testdst_dd_set_custom_id(LogDriver *d, const gchar *custom_id)
   self->custom_id = g_strdup(custom_id);
 }
 
-static gboolean
-_is_output_suspended(TestDstDriver *self, time_t now)
-{
-  if (self->suspend_until && self->suspend_until > now)
-    return TRUE;
-  return FALSE;
-}
-
-static void
-_suspend_output(TestDstDriver *self, time_t now)
-{
-  GlobalConfig *cfg = log_pipe_get_config(&self->super.super.super);
-
-  self->suspend_until = now + cfg->time_reopen;
-}
-
 static EVTTAG *
 _evt_tag_message(const GString *msg)
 {
@@ -119,113 +102,163 @@ _format_message(TestDstDriver *self, LogMessage *msg, GString *formatted_message
   log_template_format(self->template, msg, &self->template_options, LTZ_LOCAL, 0, NULL, formatted_message);
 }
 
-
-static gboolean
-_write_message(TestDstDriver *self, const GString *msg)
+static worker_insert_result_t
+_map_http_status_to_worker_status(glong http_code)
 {
-  int fd;
-  gboolean success = FALSE;
-  gint rc;
+  worker_insert_result_t retval;
 
-  msg_debug("Posting message to test file",
-    evt_tag_str("test_file", self->testfile_name),
-    evt_tag_str("driver", self->super.super.id),
-    _evt_tag_message(msg));
-  fd = open(self->testfile_name, O_NOCTTY | O_WRONLY | O_NONBLOCK);
-  if (fd < 0)
+  switch (http_code/100)
   {
-    msg_error("Error opening test file",
-      evt_tag_str("test_file", self->testfile_name),
-      evt_tag_str("driver", self->super.super.id),
-      evt_tag_error("error"),
-      _evt_tag_message(msg));
-    goto exit;
+    case 4:
+    msg_debug("curl: 4XX: msg dropped",
+      evt_tag_int("status_code", http_code));
+    retval = WORKER_INSERT_RESULT_DROP;
+    break;
+    case 5:
+    msg_debug("curl: 5XX: message will be retried",
+      evt_tag_int("status_code", http_code));
+    retval = WORKER_INSERT_RESULT_ERROR;
+    break;
+    default:
+    msg_debug("curl: OK status code",
+      evt_tag_int("status_code", http_code));
+    retval = WORKER_INSERT_RESULT_SUCCESS;
+    break;
   }
-  msg_debug("Posting message to Elasticsearch before",
-    evt_tag_str("test_file", self->testfile_name),
-    evt_tag_str("driver", self->super.super.id),
-    _evt_tag_message(msg));
 
-  rc = write(fd, msg->str, msg->len);
-  put(self->server, self->port, self->index, self->type, self->custom_id, msg->str);
+  return retval;
+}
+
+static worker_insert_result_t
+_insert(LogThrDestDriver *s, LogMessage *msg)
+{
+  TestDstDriver *self = (TestDstDriver *) s;
   
-  msg_debug("Posting message to Elasticsearch",
-    evt_tag_str("test_file", self->testfile_name),
-    evt_tag_str("driver", self->super.super.id),
-    _evt_tag_message(msg));
+  GString *message = scratch_buffers_alloc();
+  worker_insert_result_t retval;
+  glong http_code = 0;
 
-  if (rc < 0)
-  {
-    msg_error("Error writing to test file",
-      evt_tag_str("test_file", self->testfile_name),
-      evt_tag_str("driver", self->super.super.id),
-      evt_tag_error("error"),
-      _evt_tag_message(msg));
-    goto exit;
-  }
-  else if (rc != msg->len)
-  {
-    msg_error("Partial write to test_file, probably the output is too much for the kernel to consume",
-      evt_tag_str("test_file", self->testfile_name),
-      evt_tag_str("driver", self->super.super.id),
-      _evt_tag_message(msg));
-    goto exit;
-  }
+  _format_message(self, msg, message);
 
-  success = TRUE;
+  msg_debug("formatted msg",evt_tag_str("msg: ",message->str));
 
-  exit:
-  if (fd >= 0)
-    close(fd);
+  
+  msg_debug("Posting message to Elasticsearch before",
+    evt_tag_str("driver", self->super.super.super.id),
+    _evt_tag_message(message));
 
-  return success;
+  http_code = put(self->server, self->port, self->index, self->type, self->custom_id, message->str);
+  
+  retval = _map_http_status_to_worker_status(http_code);
+
+  return retval;
+
+}
+
+static gchar *
+_format_stats_instance(LogThrDestDriver *s)
+{
+  static gchar stats[1024];
+
+  TestDstDriver *self = (TestDstDriver *) s;
+
+  g_snprintf(stats, sizeof(stats), "http,%s", self->testfile_name);
+
+  return stats;
+}
+
+static const gchar *
+_format_persist_name(const LogPipe *s)
+{
+  const TestDstDriver *self = (const TestDstDriver *)s;
+  static gchar persist_name[1024];
+
+  if (s->persist_name)
+    g_snprintf(persist_name, sizeof(persist_name), "http.%s", s->persist_name);
+  else
+    g_snprintf(persist_name, sizeof(persist_name), "http(%s)", self->server);
+
+
+  msg_debug("persist_name",
+    evt_tag_str("persist_name", persist_name));
+  return persist_name;
+}
+
+
+static void
+_thread_init(LogThrDestDriver *s)
+{
+  TestDstDriver *self = (TestDstDriver *) s;
+  msg_debug("Worker thread started",
+    evt_tag_str("driver", self->super.super.super.id),
+    NULL);
 }
 
 static void
-testdst_dd_queue(LogPipe *s, LogMessage *msg, const LogPathOptions *path_options)
+_thread_deinit(LogThrDestDriver *s)
 {
-  TestDstDriver *self = (TestDstDriver *) s;
-  GString *formatted_message = scratch_buffers_alloc();
-  gboolean success;
-  time_t now = msg->timestamps[LM_TS_RECVD].tv_sec;
-
-  if (_is_output_suspended(self, now))
-    goto finish;
-
-  _format_message(self, msg, formatted_message);
-
-  G_LOCK(testdst_lock);
-  success = _write_message(self, formatted_message);
-  G_UNLOCK(testdst_lock);
-
-  if (!success)
-    _suspend_output(self, now);
-
-  finish:
-  log_dest_driver_queue_method(s, msg, path_options);
 }
 
+static gboolean
+_connect(LogThrDestDriver *s)
+{
+  return TRUE;
+}
 
+static void
+_disconnect(LogThrDestDriver *s)
+{
+}
 
 static gboolean
 testdst_dd_init(LogPipe *s)
 {
   TestDstDriver *self = (TestDstDriver *) s;
   GlobalConfig *cfg = log_pipe_get_config(s);
+  msg_debug("testdst_dd_init called",
+    evt_tag_str("driver", self->super.super.super.id),
+    NULL);
+  testdst_curl_init();
+
 
   log_template_options_init(&self->template_options, cfg);
-  return log_dest_driver_init_method(s);
+  return log_threaded_dest_driver_start(s);
+}
+
+gboolean
+testdst_dd_deinit(LogPipe *s)
+{ 
+  TestDstDriver *self = (TestDstDriver *) s;
+
+  msg_debug("testdst_dd_deinit called",
+    evt_tag_str("driver", self->super.super.super.id),
+    NULL);
+
+  return log_threaded_dest_driver_deinit_method(s);
 }
 
 static void
 testdst_dd_free(LogPipe *s)
 {
+
   TestDstDriver *self = (TestDstDriver *) s;
+
+  msg_debug("testdst_dd_free called",
+    evt_tag_str("driver", self->super.super.super.id),
+    NULL);
+
+  testdst_curl_deinit();
+  
+  g_free(self->server);
+  g_free(self->port);
+  g_free(self->type);
+  g_free(self->index);
+  g_free(self->custom_id);
 
   log_template_options_destroy(&self->template_options);
   g_free(self->testfile_name);
   log_template_unref(self->template);
-  log_dest_driver_free(s);
+  log_threaded_dest_driver_free(s);
 }
 
 LogDriver *
@@ -233,11 +266,21 @@ testdst_dd_new(gchar *testfile_name, GlobalConfig *cfg)
 {
   TestDstDriver *self = g_new0(TestDstDriver, 1);
 
-  log_dest_driver_init_instance(&self->super, cfg);
+  log_threaded_dest_driver_init_instance(&self->super, cfg);
   log_template_options_defaults(&self->template_options);
-  self->super.super.super.init = testdst_dd_init;
-  self->super.super.super.free_fn = testdst_dd_free;
-  self->super.super.super.queue = testdst_dd_queue;
+  self->super.super.super.super.init = testdst_dd_init;
+  self->super.super.super.super.deinit = testdst_dd_deinit;
+  self->super.super.super.super.free_fn = testdst_dd_free;
+  self->super.worker.thread_init = _thread_init;
+  self->super.worker.thread_deinit = _thread_deinit;
+  self->super.worker.connect = _connect;
+  self->super.worker.disconnect = _disconnect;
+  self->super.worker.insert = _insert;
+
+
+  self->super.super.super.super.generate_persist_name = _format_persist_name;
+  self->super.format.stats_instance = _format_stats_instance;
+//  self->super.super.super.super.queue = testdst_dd_queue;
   self->testfile_name = g_strdup(testfile_name);
-  return &self->super.super;
+  return (LogDriver *)self;
 }

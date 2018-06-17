@@ -3,6 +3,7 @@
 #include "driver.h"
 
 
-char *get(char *query, char *server);
-char* put(char* server, char *port, char *index, char *type, char *custom_id, char *json_struct);
+glong put(gchar* server, gchar *port, gchar *index, gchar *type, gchar *custom_id, gchar *json_struct);
+void testdst_curl_init();
+void testdst_curl_deinit();
 #endif
