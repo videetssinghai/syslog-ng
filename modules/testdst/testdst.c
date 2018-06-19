@@ -162,7 +162,7 @@ _format_stats_instance(LogThrDestDriver *s)
 
   TestDstDriver *self = (TestDstDriver *) s;
 
-  g_snprintf(stats, sizeof(stats), "http,%s", self->testfile_name);
+  g_snprintf(stats, sizeof(stats), "%s,%s,%s,%s,%s", self->server, self->port, self->index, self->type, self->custom_id);
 
   return stats;
 }
@@ -174,10 +174,10 @@ _format_persist_name(const LogPipe *s)
   static gchar persist_name[1024];
 
   if (s->persist_name)
-    g_snprintf(persist_name, sizeof(persist_name), "http.%s", s->persist_name);
+    g_snprintf(persist_name, sizeof(persist_name), "elasticsearch_dd(%s)", s->persist_name);
   else
-    g_snprintf(persist_name, sizeof(persist_name), "http(%s)", self->server);
-
+    g_snprintf(persist_name, sizeof(persist_name), "elasticsearch_dd(%s,%s,%s,%s,%s)", self->server,
+     self->port, self->index, self->type, self->custom_id);
 
   msg_debug("persist_name",
     evt_tag_str("persist_name", persist_name));

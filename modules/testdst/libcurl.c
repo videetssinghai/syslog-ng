@@ -17,10 +17,6 @@ struct MemoryStruct {
   size_t size;
 };
 
-
-char *value = NULL;
-struct curl_slist *headers = NULL;
-
 typedef struct _Testdst_Curl
 {
  CURL *curl;
@@ -56,15 +52,20 @@ build_url(char* server, char* port, char* index, char* type, char* custom_id) {
 
 }
 
-static void 
-_set_curl_headers() {
-  headers = NULL;
+static struct curl_slist * 
+_get_curl_headers() {
+
+  struct curl_slist *headers = NULL;
 
   if(self->curl) {
+
     headers = curl_slist_append(headers, "Accept: application/json");
     headers = curl_slist_append(headers, "Content-Type: application/json");
     headers = curl_slist_append(headers, "charsets: utf-8");
+
+    return headers;
   }
+
 
 }
 
@@ -90,19 +91,20 @@ WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
 
 
 static void 
-curl_set_opt(gchar* msg, gchar* url)
+curl_set_opt(gchar* msg, gchar* url, struct curl_slist *curl_headers)
 {
-    curl_easy_setopt(self->curl, CURLOPT_URL, url);
-    curl_easy_setopt(self->curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(self->curl, CURLOPT_CUSTOMREQUEST, "POST"); /* !!! */
-    curl_easy_setopt(self->curl, CURLOPT_POSTFIELDS, msg); /* data goes here */
+  
+  curl_easy_setopt(self->curl, CURLOPT_URL, url);
+  curl_easy_setopt(self->curl, CURLOPT_HTTPHEADER, curl_headers);
+  curl_easy_setopt(self->curl, CURLOPT_CUSTOMREQUEST, "POST"); /* !!! */
+  curl_easy_setopt(self->curl, CURLOPT_POSTFIELDS, msg); /* data goes here */
 
 }
 
 glong 
 put(gchar* server, gchar *port, gchar *index, gchar *type, gchar *custom_id, gchar *json_struct)
 {
-  
+
   GString *request = build_url(server, port, index, type, custom_id);
 
   struct MemoryStruct chunk;
@@ -115,9 +117,9 @@ put(gchar* server, gchar *port, gchar *index, gchar *type, gchar *custom_id, gch
     evt_tag_str("server", server),evt_tag_str("data", json_struct));
 
   if(self->curl) {
-    _set_curl_headers();
 
-    curl_set_opt(json_struct, request->str);
+    struct curl_slist *curl_headers = _get_curl_headers();
+    curl_set_opt(json_struct, request->str, curl_headers);
 
     /* for debugging */
     curl_easy_setopt(self->curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
@@ -129,21 +131,18 @@ put(gchar* server, gchar *port, gchar *index, gchar *type, gchar *custom_id, gch
 
     /* Check for errors */ 
     if(self->res != CURLE_OK)
-      {
-        fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(self->res));
-        msg_error("Error in PUT",evt_tag_str("curl_easy_perform() failed: %s\n", curl_easy_strerror(self->res)));
-      }
+    {
+      fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(self->res));
+      msg_error("Error in PUT",evt_tag_str("curl_easy_perform() failed: %s\n", curl_easy_strerror(self->res)));
+    }
     
     /* always cleanup */ 
-    curl_slist_free_all(headers);
+    curl_slist_free_all(curl_headers);
     free(chunk.memory);
 
     curl_easy_getinfo (self->curl, CURLINFO_RESPONSE_CODE, &response_code);
 
     return response_code;
-  } else {
+  } 
 
-    printf("curl not initialized correctly");
-
-  }
 }
