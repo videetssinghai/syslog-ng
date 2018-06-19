@@ -13,7 +13,6 @@ typedef struct _TestDstDriver
   LogThrDestDriver super;
   LogTemplateOptions template_options;
   LogTemplate *template;
-  gchar *testfile_name;
   gchar *server;
   gchar *port;
   gchar *index;
@@ -256,13 +255,12 @@ testdst_dd_free(LogPipe *s)
   g_free(self->custom_id);
 
   log_template_options_destroy(&self->template_options);
-  g_free(self->testfile_name);
   log_template_unref(self->template);
   log_threaded_dest_driver_free(s);
 }
 
 LogDriver *
-testdst_dd_new(gchar *testfile_name, GlobalConfig *cfg)
+testdst_dd_new(GlobalConfig *cfg)
 {
   TestDstDriver *self = g_new0(TestDstDriver, 1);
 
@@ -281,6 +279,5 @@ testdst_dd_new(gchar *testfile_name, GlobalConfig *cfg)
   self->super.super.super.super.generate_persist_name = _format_persist_name;
   self->super.format.stats_instance = _format_stats_instance;
 //  self->super.super.super.super.queue = testdst_dd_queue;
-  self->testfile_name = g_strdup(testfile_name);
   return (LogDriver *)self;
 }

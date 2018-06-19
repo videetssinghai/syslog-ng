@@ -7,7 +7,7 @@
 
 LogTemplateOptions *testdst_dd_get_template_options(LogDriver *s);
 void testdst_dd_set_template(LogDriver *self, LogTemplate *template);
-LogDriver *testdst_dd_new(gchar *user, GlobalConfig *cfg);
+LogDriver *testdst_dd_new(GlobalConfig *cfg);
 void testdst_dd_set_server(LogDriver *d, const gchar *server);
 void testdst_dd_set_port(LogDriver *d, const gchar *port);
 void testdst_dd_set_type(LogDriver *d, const gchar *type);

@@ -53,7 +53,7 @@ extern LogDriver *last_driver;
 
 /* INCLUDE_DECLS */
 
-%type   <ptr> dest_testfile
+%type   <ptr> testdst_dd
 
 %token KW_TESTDST
 %token KW_SERVER
@@ -67,15 +67,16 @@ extern LogDriver *last_driver;
 %%
 
 start
-: LL_CONTEXT_DESTINATION dest_testfile       { *instance = $2; YYACCEPT; }
+: LL_CONTEXT_DESTINATION testdst_dd       { *instance = $2; YYACCEPT; }
 ;
 
 
-dest_testfile
+testdst_dd
 : KW_TESTDST 
-'(' string            { last_driver = testdst_dd_new($3, configuration); free($3); }
-testdst_opts
-')'             { $$ = last_driver; }
+{ 
+last_driver = testdst_dd_new(configuration);
+}
+'(' testdst_opts ')'             { $$ = last_driver; }
 ;
 
 
