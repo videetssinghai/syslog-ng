@@ -80,7 +80,7 @@ void
 testdst_dd_set_custom_id(LogDriver *d, const gchar *custom_id)
 {
   TestDstDriver *self = (TestDstDriver *) d;
-
+  
   g_free(self->custom_id);
   self->custom_id = g_strdup(custom_id);
 }

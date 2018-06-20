@@ -12,49 +12,51 @@
 #include <unistd.h>
 
 
-struct MemoryStruct {
+struct MemoryStruct
+{
   char *memory;
   size_t size;
 };
 
 typedef struct _Testdst_Curl
 {
- CURL *curl;
- CURLcode res;
+  CURL *curl;
+  CURLcode res;
 
 } Testdst_Curl; 
 
 Testdst_Curl *self;
 
 void
-testdst_curl_init() {
-
+testdst_curl_init()
+{
   self = g_new0(Testdst_Curl, 1);
   curl_global_init(CURL_GLOBAL_DEFAULT);
   self->curl = curl_easy_init();
-
 }
 
 void
-testdst_curl_deinit() {
-
+testdst_curl_deinit() 
+{
  curl_easy_cleanup(self->curl);
  curl_global_cleanup();
-
 }
 
 static GString *
-build_url(char* server, char* port, char* index, char* type, char* custom_id) {
-
+build_url(char* server, char* port, char* index, char* type, char* custom_id)
+{
  GString *url = g_string_sized_new(256);
- g_string_printf(url, "http://%s:%s/%s/%s/%s",server, port, index, type, custom_id);
- return url;
+ if (custom_id)
+  g_string_printf(url, "http://%s:%s/%s/%s/%s",server, port, index, type, custom_id);
+else
+  g_string_printf(url, "http://%s:%s/%s/%s",server, port, index, type);
 
+return url;
 }
 
 static struct curl_slist * 
-_get_curl_headers() {
-
+_get_curl_headers() 
+{
   struct curl_slist *headers = NULL;
 
   if(self->curl) {
@@ -66,7 +68,8 @@ _get_curl_headers() {
     return headers;
   }
 
-
+  msg_error("Error in Headers, curl not initialized");
+  return headers;
 }
 
 static size_t
@@ -78,7 +81,7 @@ WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
   mem->memory = realloc(mem->memory, mem->size + realsize + 1);
   if(mem->memory == NULL) {
     /* out of memory! */ 
-    printf("not enough memory (realloc returned NULL)\n");
+    msg_error("not enough memory (realloc returned NULL)");
     return 0;
   }
 
@@ -93,7 +96,7 @@ WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
 static void 
 curl_set_opt(gchar* msg, gchar* url, struct curl_slist *curl_headers)
 {
-  
+
   curl_easy_setopt(self->curl, CURLOPT_URL, url);
   curl_easy_setopt(self->curl, CURLOPT_HTTPHEADER, curl_headers);
   curl_easy_setopt(self->curl, CURLOPT_CUSTOMREQUEST, "POST"); /* !!! */
@@ -104,7 +107,6 @@ curl_set_opt(gchar* msg, gchar* url, struct curl_slist *curl_headers)
 glong 
 put(gchar* server, gchar *port, gchar *index, gchar *type, gchar *custom_id, gchar *json_struct)
 {
-
   GString *request = build_url(server, port, index, type, custom_id);
 
   struct MemoryStruct chunk;
@@ -132,7 +134,6 @@ put(gchar* server, gchar *port, gchar *index, gchar *type, gchar *custom_id, gch
     /* Check for errors */ 
     if(self->res != CURLE_OK)
     {
-      fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(self->res));
       msg_error("Error in PUT",evt_tag_str("curl_easy_perform() failed: %s\n", curl_easy_strerror(self->res)));
     }
     
