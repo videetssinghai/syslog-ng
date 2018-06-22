@@ -141,12 +141,7 @@ _insert(LogThrDestDriver *s, LogMessage *msg)
 
   msg_debug("formatted msg",evt_tag_str("msg: ",message->str));
 
-  
-  msg_debug("Posting message to Elasticsearch before",
-    evt_tag_str("driver", self->super.super.super.id),
-    _evt_tag_message(message));
-
-  http_code = put(self->server, self->port, self->index, self->type, self->custom_id, message->str);
+  http_code = _put_elasticsearch(self->server, self->port, self->index, self->type, self->custom_id, message->str);
   
   retval = _map_http_status_to_worker_status(http_code);
 
@@ -178,8 +173,6 @@ _format_persist_name(const LogPipe *s)
     g_snprintf(persist_name, sizeof(persist_name), "elasticsearch_dd(%s,%s,%s,%s,%s)", self->server,
      self->port, self->index, self->type, self->custom_id);
 
-  msg_debug("persist_name",
-    evt_tag_str("persist_name", persist_name));
   return persist_name;
 }
 
@@ -214,9 +207,7 @@ testdst_dd_init(LogPipe *s)
 {
   TestDstDriver *self = (TestDstDriver *) s;
   GlobalConfig *cfg = log_pipe_get_config(s);
-  msg_debug("testdst_dd_init called",
-    evt_tag_str("driver", self->super.super.super.id),
-    NULL);
+ 
   testdst_curl_init();
 
 
@@ -229,10 +220,6 @@ testdst_dd_deinit(LogPipe *s)
 { 
   TestDstDriver *self = (TestDstDriver *) s;
 
-  msg_debug("testdst_dd_deinit called",
-    evt_tag_str("driver", self->super.super.super.id),
-    NULL);
-
   return log_threaded_dest_driver_deinit_method(s);
 }
 
@@ -241,10 +228,6 @@ testdst_dd_free(LogPipe *s)
 {
 
   TestDstDriver *self = (TestDstDriver *) s;
-
-  msg_debug("testdst_dd_free called",
-    evt_tag_str("driver", self->super.super.super.id),
-    NULL);
 
   testdst_curl_deinit();
   
@@ -269,15 +252,15 @@ testdst_dd_new(GlobalConfig *cfg)
   self->super.super.super.super.init = testdst_dd_init;
   self->super.super.super.super.deinit = testdst_dd_deinit;
   self->super.super.super.super.free_fn = testdst_dd_free;
+  
   self->super.worker.thread_init = _thread_init;
   self->super.worker.thread_deinit = _thread_deinit;
   self->super.worker.connect = _connect;
   self->super.worker.disconnect = _disconnect;
   self->super.worker.insert = _insert;
 
-
   self->super.super.super.super.generate_persist_name = _format_persist_name;
   self->super.format.stats_instance = _format_stats_instance;
-//  self->super.super.super.super.queue = testdst_dd_queue;
+  
   return (LogDriver *)self;
 }

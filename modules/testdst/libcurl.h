@@ -3,7 +3,7 @@
 #include "driver.h"
 
 
-glong put(gchar* server, gchar *port, gchar *index, gchar *type, gchar *custom_id, gchar *json_struct);
+glong _put_elasticsearch(gchar* server, gchar *port, gchar *index, gchar *type, gchar *custom_id, gchar *json_struct);
 void testdst_curl_init();
 void testdst_curl_deinit();
 #endif

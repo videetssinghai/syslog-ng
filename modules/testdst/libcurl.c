@@ -12,12 +12,6 @@
 #include <unistd.h>
 
 
-struct MemoryStruct
-{
-  char *memory;
-  size_t size;
-};
-
 typedef struct _Testdst_Curl
 {
   CURL *curl;
@@ -43,7 +37,7 @@ testdst_curl_deinit()
 }
 
 static GString *
-build_url(char* server, char* port, char* index, char* type, char* custom_id)
+_build_url(char* server, char* port, char* index, char* type, char* custom_id)
 {
  GString *url = g_string_sized_new(256);
  if (custom_id)
@@ -73,28 +67,17 @@ _get_curl_headers()
 }
 
 static size_t
-WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
+_write_data(void *buffer, size_t G_GNUC_UNUSED size, size_t nmemb, void *data)
 {
-  size_t realsize = size * nmemb;
-  struct MemoryStruct *mem = (struct MemoryStruct *)userp;
+  GString *gbuffer = data;
+  g_string_append_len(gbuffer, buffer, nmemb);
 
-  mem->memory = realloc(mem->memory, mem->size + realsize + 1);
-  if(mem->memory == NULL) {
-    /* out of memory! */ 
-    msg_error("not enough memory (realloc returned NULL)");
-    return 0;
-  }
-
-  memcpy(&(mem->memory[mem->size]), contents, realsize);
-  mem->size += realsize;
-  mem->memory[mem->size] = 0;
-
-  return realsize;
+  return nmemb;
 }
 
 
 static void 
-curl_set_opt(gchar* msg, gchar* url, struct curl_slist *curl_headers)
+_curl_set_opt(gchar* msg, gchar* url, struct curl_slist *curl_headers)
 {
 
   curl_easy_setopt(self->curl, CURLOPT_URL, url);
@@ -105,14 +88,11 @@ curl_set_opt(gchar* msg, gchar* url, struct curl_slist *curl_headers)
 }
 
 glong 
-put(gchar* server, gchar *port, gchar *index, gchar *type, gchar *custom_id, gchar *json_struct)
+_put_elasticsearch(gchar* server, gchar *port, gchar *index, gchar *type, gchar *custom_id, gchar *json_struct)
 {
-  GString *request = build_url(server, port, index, type, custom_id);
-
-  struct MemoryStruct chunk;
-  chunk.memory = malloc(1);  /* will be grown as needed by the realloc above */ 
-  chunk.size = 0;    /* no data at this point */ 
+  GString *request = _build_url(server, port, index, type, custom_id);
   glong response_code;
+  GString *response;
 
   msg_debug("Inside the libcurl",
     evt_tag_str("url", request->str),
@@ -121,15 +101,16 @@ put(gchar* server, gchar *port, gchar *index, gchar *type, gchar *custom_id, gch
   if(self->curl) {
 
     struct curl_slist *curl_headers = _get_curl_headers();
-    curl_set_opt(json_struct, request->str, curl_headers);
+    _curl_set_opt(json_struct, request->str, curl_headers);
 
     /* for debugging */
-    curl_easy_setopt(self->curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
-    curl_easy_setopt(self->curl, CURLOPT_WRITEDATA, (void *)&chunk);
-    
+    response = g_string_new(NULL); /* the write buffer */
+    curl_easy_setopt(self->curl, CURLOPT_WRITEFUNCTION, _write_data);
+    curl_easy_setopt(self->curl, CURLOPT_WRITEDATA, response);
+
     self->res = curl_easy_perform(self->curl);
 
-    msg_debug("request done", evt_tag_str("result",chunk.memory));
+    msg_debug("request completed", evt_tag_str("result",response->str));
 
     /* Check for errors */ 
     if(self->res != CURLE_OK)
@@ -139,7 +120,7 @@ put(gchar* server, gchar *port, gchar *index, gchar *type, gchar *custom_id, gch
     
     /* always cleanup */ 
     curl_slist_free_all(curl_headers);
-    free(chunk.memory);
+    g_string_free(response, TRUE);
 
     curl_easy_getinfo (self->curl, CURLINFO_RESPONSE_CODE, &response_code);
 
