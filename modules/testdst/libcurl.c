@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <curl/curl.h>
 #include <strings.h>
 #include "libcurl.h"
 #include "messages.h"
@@ -12,32 +11,24 @@
 #include <unistd.h>
 
 
-typedef struct _Testdst_Curl
+Testdst_Curl *
+tesdst_curl_create(void)
 {
-  CURL *curl;
-  CURLcode res;
-
-} Testdst_Curl; 
-
-Testdst_Curl *self;
-
-void
-testdst_curl_init()
-{
-  self = g_new0(Testdst_Curl, 1);
+  Testdst_Curl* self = g_new0(Testdst_Curl, 1);
   curl_global_init(CURL_GLOBAL_DEFAULT);
   self->curl = curl_easy_init();
+  return self;
 }
 
 void
-testdst_curl_deinit() 
+testdst_curl_deinit(Testdst_Curl* self) 
 {
  curl_easy_cleanup(self->curl);
  curl_global_cleanup();
 }
 
 static GString *
-_build_url(char* server, char* port, char* index, char* type, char* custom_id)
+_build_url(gchar* server, gchar* port, gchar* index, gchar* type, gchar* custom_id)
 {
  GString *url = g_string_sized_new(256);
  if (custom_id)
@@ -49,7 +40,7 @@ return url;
 }
 
 static struct curl_slist * 
-_get_curl_headers() 
+_get_curl_headers(Testdst_Curl* self) 
 {
   struct curl_slist *headers = NULL;
 
@@ -77,7 +68,7 @@ _write_data(void *buffer, size_t G_GNUC_UNUSED size, size_t nmemb, void *data)
 
 
 static void 
-_curl_set_opt(gchar* msg, gchar* url, struct curl_slist *curl_headers)
+_curl_set_opt(Testdst_Curl* self, gchar* msg, gchar* url, struct curl_slist *curl_headers)
 {
 
   curl_easy_setopt(self->curl, CURLOPT_URL, url);
@@ -88,7 +79,7 @@ _curl_set_opt(gchar* msg, gchar* url, struct curl_slist *curl_headers)
 }
 
 glong 
-_put_elasticsearch(gchar* server, gchar *port, gchar *index, gchar *type, gchar *custom_id, gchar *json_struct)
+_put_elasticsearch(Testdst_Curl* self, gchar* server, gchar *port, gchar *index, gchar *type, gchar *custom_id, gchar *json_struct)
 {
   GString *request = _build_url(server, port, index, type, custom_id);
   glong response_code;
@@ -100,22 +91,22 @@ _put_elasticsearch(gchar* server, gchar *port, gchar *index, gchar *type, gchar 
 
   if(self->curl) {
 
-    struct curl_slist *curl_headers = _get_curl_headers();
-    _curl_set_opt(json_struct, request->str, curl_headers);
+    struct curl_slist *curl_headers = _get_curl_headers(self);
+    _curl_set_opt(self, json_struct, request->str, curl_headers);
 
     /* for debugging */
     response = g_string_new(NULL); /* the write buffer */
     curl_easy_setopt(self->curl, CURLOPT_WRITEFUNCTION, _write_data);
     curl_easy_setopt(self->curl, CURLOPT_WRITEDATA, response);
 
-    self->res = curl_easy_perform(self->curl);
+    self->result = curl_easy_perform(self->curl);
 
     msg_debug("request completed", evt_tag_str("result",response->str));
 
     /* Check for errors */ 
-    if(self->res != CURLE_OK)
+    if(self->result != CURLE_OK)
     {
-      msg_error("Error in PUT",evt_tag_str("curl_easy_perform() failed: %s\n", curl_easy_strerror(self->res)));
+      msg_error("Error in PUT",evt_tag_str("curl_easy_perform() failed: %s\n", curl_easy_strerror(self->result)));
     }
     
     /* always cleanup */ 

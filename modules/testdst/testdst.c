@@ -18,6 +18,7 @@ typedef struct _TestDstDriver
   gchar *index;
   gchar *type;
   gchar *custom_id;
+  Testdst_Curl* curl;
   time_t suspend_until;
 } TestDstDriver;
 
@@ -141,7 +142,7 @@ _insert(LogThrDestDriver *s, LogMessage *msg)
 
   msg_debug("formatted msg",evt_tag_str("msg: ",message->str));
 
-  http_code = _put_elasticsearch(self->server, self->port, self->index, self->type, self->custom_id, message->str);
+  http_code = _put_elasticsearch(self->curl, self->server, self->port, self->index, self->type, self->custom_id, message->str);
   
   retval = _map_http_status_to_worker_status(http_code);
 
@@ -208,8 +209,7 @@ testdst_dd_init(LogPipe *s)
   TestDstDriver *self = (TestDstDriver *) s;
   GlobalConfig *cfg = log_pipe_get_config(s);
  
-  testdst_curl_init();
-
+  self->curl = tesdst_curl_create();
 
   log_template_options_init(&self->template_options, cfg);
   return log_threaded_dest_driver_start(s);
@@ -229,7 +229,7 @@ testdst_dd_free(LogPipe *s)
 
   TestDstDriver *self = (TestDstDriver *) s;
 
-  testdst_curl_deinit();
+  testdst_curl_deinit(self->curl);
   
   g_free(self->server);
   g_free(self->port);
