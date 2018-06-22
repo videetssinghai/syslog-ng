@@ -46,8 +46,8 @@ CfgParser testdst_parser =
 #endif
   .name = "testdst",
   .keywords = testdst_keywords,
-  .parse = (gint (*)(CfgLexer *, gpointer *, gpointer)) testdst_parse,
-  .cleanup = (void (*)(gpointer)) log_pipe_unref,
+  .parse = (gint ( *)(CfgLexer *, gpointer *, gpointer)) testdst_parse,
+  .cleanup = (void ( *)(gpointer)) log_pipe_unref,
 };
 
 CFG_PARSER_IMPLEMENT_LEXER_BINDING(testdst_, LogDriver **)

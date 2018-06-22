@@ -18,7 +18,7 @@ typedef struct _TestDstDriver
   gchar *index;
   gchar *type;
   gchar *custom_id;
-  Testdst_Curl* curl;
+  Testdst_Curl *curl;
   time_t suspend_until;
 } TestDstDriver;
 
@@ -81,7 +81,7 @@ void
 testdst_dd_set_custom_id(LogDriver *d, const gchar *custom_id)
 {
   TestDstDriver *self = (TestDstDriver *) d;
-  
+
   g_free(self->custom_id);
   self->custom_id = g_strdup(custom_id);
 }
@@ -92,8 +92,8 @@ _evt_tag_message(const GString *msg)
   const int max_len = 30;
 
   return evt_tag_printf("message", "%.*s%s",
-    (int) MIN(max_len, msg->len), msg->str,
-    msg->len > max_len ? "..." : "");
+                        (int) MIN(max_len, msg->len), msg->str,
+                        msg->len > max_len ? "..." : "");
 }
 
 static void
@@ -108,23 +108,23 @@ _map_http_status_to_worker_status(glong http_code)
   worker_insert_result_t retval;
 
   switch (http_code/100)
-  {
+    {
     case 4:
-    msg_debug("curl: 4XX: msg dropped",
-      evt_tag_int("status_code", http_code));
-    retval = WORKER_INSERT_RESULT_DROP;
-    break;
+      msg_debug("curl: 4XX: msg dropped",
+                evt_tag_int("status_code", http_code));
+      retval = WORKER_INSERT_RESULT_DROP;
+      break;
     case 5:
-    msg_debug("curl: 5XX: message will be retried",
-      evt_tag_int("status_code", http_code));
-    retval = WORKER_INSERT_RESULT_ERROR;
-    break;
+      msg_debug("curl: 5XX: message will be retried",
+                evt_tag_int("status_code", http_code));
+      retval = WORKER_INSERT_RESULT_ERROR;
+      break;
     default:
-    msg_debug("curl: OK status code",
-      evt_tag_int("status_code", http_code));
-    retval = WORKER_INSERT_RESULT_SUCCESS;
-    break;
-  }
+      msg_debug("curl: OK status code",
+                evt_tag_int("status_code", http_code));
+      retval = WORKER_INSERT_RESULT_SUCCESS;
+      break;
+    }
 
   return retval;
 }
@@ -133,7 +133,7 @@ static worker_insert_result_t
 _insert(LogThrDestDriver *s, LogMessage *msg)
 {
   TestDstDriver *self = (TestDstDriver *) s;
-  
+
   GString *message = scratch_buffers_alloc();
   worker_insert_result_t retval;
   glong http_code = 0;
@@ -142,8 +142,9 @@ _insert(LogThrDestDriver *s, LogMessage *msg)
 
   msg_debug("formatted msg",evt_tag_str("msg: ",message->str));
 
-  http_code = _put_elasticsearch(self->curl, self->server, self->port, self->index, self->type, self->custom_id, message->str);
-  
+  http_code = _put_elasticsearch(self->curl, self->server, self->port, self->index, self->type, self->custom_id,
+                                 message->str);
+
   retval = _map_http_status_to_worker_status(http_code);
 
   return retval;
@@ -172,7 +173,7 @@ _format_persist_name(const LogPipe *s)
     g_snprintf(persist_name, sizeof(persist_name), "elasticsearch_dd(%s)", s->persist_name);
   else
     g_snprintf(persist_name, sizeof(persist_name), "elasticsearch_dd(%s,%s,%s,%s,%s)", self->server,
-     self->port, self->index, self->type, self->custom_id);
+               self->port, self->index, self->type, self->custom_id);
 
   return persist_name;
 }
@@ -183,8 +184,8 @@ _thread_init(LogThrDestDriver *s)
 {
   TestDstDriver *self = (TestDstDriver *) s;
   msg_debug("Worker thread started",
-    evt_tag_str("driver", self->super.super.super.id),
-    NULL);
+            evt_tag_str("driver", self->super.super.super.id),
+            NULL);
 }
 
 static void
@@ -208,7 +209,7 @@ testdst_dd_init(LogPipe *s)
 {
   TestDstDriver *self = (TestDstDriver *) s;
   GlobalConfig *cfg = log_pipe_get_config(s);
- 
+
   self->curl = tesdst_curl_create();
 
   log_template_options_init(&self->template_options, cfg);
@@ -217,7 +218,7 @@ testdst_dd_init(LogPipe *s)
 
 gboolean
 testdst_dd_deinit(LogPipe *s)
-{ 
+{
   TestDstDriver *self = (TestDstDriver *) s;
 
   return log_threaded_dest_driver_deinit_method(s);
@@ -230,7 +231,7 @@ testdst_dd_free(LogPipe *s)
   TestDstDriver *self = (TestDstDriver *) s;
 
   testdst_curl_deinit(self->curl);
-  
+
   g_free(self->server);
   g_free(self->port);
   g_free(self->type);
@@ -252,7 +253,7 @@ testdst_dd_new(GlobalConfig *cfg)
   self->super.super.super.super.init = testdst_dd_init;
   self->super.super.super.super.deinit = testdst_dd_deinit;
   self->super.super.super.super.free_fn = testdst_dd_free;
-  
+
   self->super.worker.thread_init = _thread_init;
   self->super.worker.thread_deinit = _thread_deinit;
   self->super.worker.connect = _connect;
@@ -261,6 +262,6 @@ testdst_dd_new(GlobalConfig *cfg)
 
   self->super.super.super.super.generate_persist_name = _format_persist_name;
   self->super.format.stats_instance = _format_stats_instance;
-  
+
   return (LogDriver *)self;
 }
